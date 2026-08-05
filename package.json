@@ -1,0 +1,17 @@
+{
+  "name": "ai-harness",
+  "version": "0.0.0",
+  "description": "learning how to build harness for ai",
+  "type": "module",
+  "scripts": {
+    "hello": "tsx --env-file=.env apps/hello-world/index.ts",
+    "translator": "tsx --env-file=.env apps/translator/index.ts",
+    "code": "tsx --env-file=.env apps/mini-coding-agent/index.ts"
+  },
+  "packageManager": "pnpm@11.18.0",
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "tsx": "^4.23.5",
+    "typescript": "^7.0.2"
+  }
+}
