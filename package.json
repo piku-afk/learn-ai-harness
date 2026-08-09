@@ -6,10 +6,17 @@
   "scripts": {
     "hello": "tsx --env-file=.env apps/hello-world/index.ts",
     "translator": "tsx --env-file=.env apps/translator/index.ts",
-    "code": "tsx --env-file=.env apps/mini-coding-agent/index.ts"
+    "code": "tsx --env-file=.env apps/mini-coding-agent/index.ts",
+    "test": "tsx --test apps/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
   },
-  "packageManager": "pnpm@11.18.0",
+  "packageManager": "pnpm@11.20.0",
+  "dependencies": {
+    "ai": "^7.0.52",
+    "zod": "^4.4.3"
+  },
   "devDependencies": {
+    "@ai-sdk/devtools": "^1.0.11",
     "@types/node": "^26.1.2",
     "tsx": "^4.23.5",
     "typescript": "^7.0.2"
