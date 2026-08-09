@@ -1,9 +1,10 @@
 import { gateway, generateText, Output } from 'ai';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import z from 'zod';
 
-import { ensurePathExists, isValidPath } from '../shared/util.js';
+import { ensurePathExists, isValidPath } from '../../shared/util.js';
+import { deleteNoteEntries, updateNoteEntries } from './notes.js';
+import { ModelResponseSchema, NotesSchema } from './schema.js';
 
 if (process.env.NODE_ENV === 'development') {
   const { DevToolsTelemetry } = await import('@ai-sdk/devtools');
@@ -12,76 +13,7 @@ if (process.env.NODE_ENV === 'development') {
   registerTelemetry(DevToolsTelemetry());
 }
 
-const CategorySchema = z.enum(['characters', 'places', 'misc']).describe('entry category');
-const NotesEntriesSchema = z.record(
-  CategorySchema,
-  z.array(
-    z.tuple([
-      z.number().describe('entry unique id'),
-      z.string().describe('character, place, or miscellaneous entry name from the source text'),
-      z.string().describe('character, place, or miscellaneous entry name'),
-      z.string().describe('one-line description of the  entry'),
-    ]),
-  ),
-);
-const DeletedNotesEntriesSchema = z.record(
-  CategorySchema,
-  z.array(z.number().describe('entry id to be deleted')),
-);
-const NotesSchema = z.intersection(z.object({ name: z.string() }), NotesEntriesSchema);
-const ModelResponseSchema = z.object({
-  translatedText: z.string().describe('the complete english translated text'),
-  notesEntries: NotesEntriesSchema,
-  deletedNotesEntries: DeletedNotesEntriesSchema,
-});
-
-type Notes = z.infer<typeof NotesSchema>;
-type NotesEntries = z.infer<typeof NotesEntriesSchema>;
-type DeletedNotesEntries = z.infer<typeof DeletedNotesEntriesSchema>;
-
 const instructions = await readFile(join('apps', 'translator', 'SYSTEM INSTRUCTIONS.md'), 'utf8');
-
-function updateNoteEntries({
-  notes,
-  notesEntries,
-}: {
-  notes: Notes;
-  notesEntries: NotesEntries;
-}): Notes {
-  const newNotes = structuredClone(notes);
-
-  let category: keyof NotesEntries;
-  for (category in notesEntries) {
-    const entriesMap = new Map(newNotes[category].map((entry) => [entry[0], entry]));
-
-    for (const entry of notesEntries[category]) {
-      entriesMap.set(entry[0], entry);
-    }
-
-    newNotes[category] = [...entriesMap.values()];
-  }
-
-  return newNotes;
-}
-
-function deleteNoteEntries({
-  notes,
-  deletedNotesEntries,
-}: {
-  notes: Notes;
-  deletedNotesEntries: DeletedNotesEntries;
-}) {
-  const newNotes = structuredClone(notes);
-
-  let category: keyof NotesEntries;
-  for (category in deletedNotesEntries) {
-    const idsToDelete = new Set(deletedNotesEntries[category]);
-
-    newNotes[category] = newNotes[category].filter(([id]) => !idsToDelete.has(id));
-  }
-
-  return newNotes;
-}
 
 async function translate({
   inputFile,

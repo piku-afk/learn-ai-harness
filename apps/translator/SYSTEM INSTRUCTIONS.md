@@ -152,7 +152,6 @@ Desir cleared his throat and began speaking:
 Return only valid JSON. Use only these top-level fields. Entries in `notesEntries` must contain exactly 4 elements, and each entry ID must be numeric. Use `[]` for empty categories. No Markdown or extra text.
 
 ```json
-
 {
   "translatedText": "complete english translation...",
   "notesEntries": {
