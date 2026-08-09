@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "hello": "tsx --env-file=.env apps/hello-world/index.ts",
-    "translator": "tsx --env-file=.env apps/translator/index.ts",
+    "translator": "tsx --env-file=.env apps/translator/src/index.ts",
     "code": "tsx --env-file=.env apps/mini-coding-agent/index.ts",
     "test": "tsx --test apps/**/*.test.ts",
     "typecheck": "tsc --noEmit"

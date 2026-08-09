@@ -1,28 +1,35 @@
 import z from 'zod';
 
-export const CategorySchema = z.enum(['characters', 'places', 'misc']).describe('entry category');
-export const NotesEntriesSchema = z.record(
-  CategorySchema,
-  z.array(
-    z.tuple([
-      z.number().describe('entry unique id'),
-      z.string().describe('character, place, or miscellaneous entry name from the source text'),
-      z.string().describe('character, place, or miscellaneous entry name'),
-      z.string().describe('one-line description of the  entry'),
-    ]),
-  ),
-);
-export const DeletedNotesEntriesSchema = z.record(
-  CategorySchema,
-  z.array(z.number().describe('entry id to be deleted')),
-);
-export const NotesSchema = z.intersection(z.object({ name: z.string() }), NotesEntriesSchema);
-export const ModelResponseSchema = z.object({
-  translatedText: z.string().describe('the complete english translated text'),
-  notesEntries: NotesEntriesSchema,
-  deletedNotesEntries: DeletedNotesEntriesSchema,
+const Category = z.enum(['characters', 'places', 'misc']).describe('entry category');
+
+const Note = z.object({
+  category: Category,
+  id: z.string().describe('16-character random entry unique id'),
+  description: z.string().describe('one-line description of the  entry'),
+  englishName: z.string().describe('character, place, or miscellaneous entry name'),
+  sourceName: z
+    .string()
+    .describe('character, place, or miscellaneous entry name from the source text'),
 });
 
-export type Notes = z.infer<typeof NotesSchema>;
-export type NotesEntries = z.infer<typeof NotesEntriesSchema>;
-export type DeletedNotesEntries = z.infer<typeof DeletedNotesEntriesSchema>;
+export const NotesChanges = z.object({
+  updates: z.array(Note).default([]),
+  additions: z.array(Note.omit({ id: true })).default([]),
+  deletions: z.array(Note.pick({ category: true, id: true })).default([]),
+});
+
+export const ModelResponse = z.object({
+  notesChanges: NotesChanges,
+  translatedText: z.string().describe('the complete english translated text'),
+});
+
+export const Notes = z.intersection(
+  z.object({ name: z.string().describe('novel name') }),
+  z.record(Category, z.array(Note.omit({ category: true })).default([])),
+);
+
+export type Note = z.infer<typeof Note>;
+export type Notes = z.infer<typeof Notes>;
+export type Category = z.infer<typeof Category>;
+export type NotesChanges = z.infer<typeof NotesChanges>;
+export type ModelResponse = z.infer<typeof ModelResponse>;

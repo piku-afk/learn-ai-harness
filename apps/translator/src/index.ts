@@ -3,8 +3,8 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { ensurePathExists, isValidPath } from '../../shared/util.js';
-import { deleteNoteEntries, updateNoteEntries } from './notes.js';
-import { ModelResponseSchema, NotesSchema } from './schema.js';
+import { manageNotes } from './notes.js';
+import { ModelResponse, Notes } from './schema.js';
 
 if (process.env.NODE_ENV === 'development') {
   const { DevToolsTelemetry } = await import('@ai-sdk/devtools');
@@ -12,6 +12,20 @@ if (process.env.NODE_ENV === 'development') {
 
   registerTelemetry(DevToolsTelemetry());
 }
+
+// Application entry point for the translation workflow.
+//
+// The workflow is orchestrated in the following order:
+// 1. Read the raw source text and extract individual chapters using `chapters`.
+// 2. Write the extracted chapters to the raw chapters directory.
+// 3. Read the extracted chapter files and translate them using `translator`.
+// 4. Apply the model's note changes using `notes`.
+// 5. Write the translated chapter and updated notes to the output directory.
+// 6. Track and report the total AI credits consumed during the workflow.
+//
+// `index.ts` is responsible only for coordinating these modules and managing
+// the overall workflow; the individual modules contain the implementation
+// details for each step.
 
 const instructions = await readFile(join('apps', 'translator', 'SYSTEM INSTRUCTIONS.md'), 'utf8');
 
@@ -33,16 +47,16 @@ async function translate({
     readFile(inputFile, 'utf8'),
   ]);
 
-  const notes = NotesSchema.parse(JSON.parse(notesContent));
+  const notes = Notes.parse(JSON.parse(notesContent));
 
   const {
-    output: { translatedText, notesEntries, deletedNotesEntries },
+    output: { notesChanges, translatedText },
   } = await generateText({
     model: 'tencent/hy3',
     instructions,
     temperature: 0.1,
     reasoning: 'none',
-    output: Output.object({ schema: ModelResponseSchema }),
+    output: Output.object({ schema: ModelResponse }),
     maxOutputTokens: 10_000,
     messages: [
       {
@@ -57,11 +71,9 @@ async function translate({
 
   // write translated text to output file
   await writeFile(outputFile, translatedText, 'utf8');
+  const updatedNotes = manageNotes(notes, notesChanges);
 
-  // update and write notes
-  const updatedNotes = updateNoteEntries({ notes, notesEntries });
-  const deletedNotes = deleteNoteEntries({ notes: updatedNotes, deletedNotesEntries });
-  await writeFile(notesFile, JSON.stringify(deletedNotes, null, 2), 'utf8');
+  await writeFile(notesFile, JSON.stringify(updatedNotes, null, 2), 'utf8');
 }
 
 const rawsFolderPath = join('apps', 'translator', 'test-translation', 'raws');

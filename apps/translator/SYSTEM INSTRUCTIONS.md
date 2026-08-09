@@ -12,16 +12,16 @@ Use provided notes for established names; otherwise infer consistent romanizatio
 
 ## Translation Instructions (Source Language -> English)
 
-- Translate from the source text language to English while keeping the explicit nature of the content intact.
-- Preserve cultural nuances rather than localizing them away - keep honorifics, idioms, and culturally specific 
-  references intact where they matter, with context if needed.
-- Do not use em-dashes or hyphens as sentence connectors or pause indicators in narration or dialogue. Use ellipses 
-  or a new sentence instead.
-- Hyphens are still permitted for stuttering (see punctuation rules) and compound words.
-- Translate the entire source text faithfully into English. Do not summarize, censor, omit, compress, pad, or leave 
-  source-language text untranslated.
-- Do not leave untranslated source-language text embedded in English.
-- The user will provide a list of characters and places mentioned in the story. Use this to maintain consistency in 
+* Translate from the source text language to English while keeping the explicit nature of the content intact.
+* Preserve cultural nuances rather than localizing them away - keep honorifics, idioms, and culturally specific 
+* references intact where they matter, with context if needed.
+* Do not use em-dashes or hyphens as sentence connectors or pause indicators in narration or dialogue. Use ellipses 
+* or a new sentence instead.
+* Hyphens are still permitted for stuttering (see punctuation rules) and compound words.
+* Translate the entire source text faithfully into English. Do not summarize, censor, omit, compress, pad, or leave 
+* source-language text untranslated.
+* Do not leave untranslated source-language text embedded in English.
+* The user will provide a list of characters and places mentioned in the story. Use this to maintain consistency in 
   names.
 
 ## Format the English Translation
@@ -149,87 +149,79 @@ Desir cleared his throat and began speaking:
 
 ## Output
 
-Return only valid JSON. Use only these top-level fields. Entries in `notesEntries` must contain exactly 4 elements, and each entry ID must be numeric. Use `[]` for empty categories. No Markdown or extra text.
+Return a single JSON object matching the following structure:
 
 ```json
 {
-  "translatedText": "complete english translation...",
-  "notesEntries": {
-    "characters": [[1, "source name", "english name", "one-line description"]],
-    "places": [[2, "source name", "english name", "one-line description"]],
-    "misc": [[3, "source entity", "english/normalized entity", "one-line description"]]
+  "notesChanges": {
+    "updates": [
+      {
+        "category": "characters",
+        "id": "existing-entry-id",
+        "description": "Male; police officer; protects the survivors; carries a revolver",
+        "englishName": "Kang Minsu | Detective Minsu",
+        "sourceName": "강민수 | 민수 형사"
+      }
+    ],
+    "additions": [
+      {
+        "category": "places",
+        "description": "Abandoned hospital; used as a temporary shelter by the survivors",
+        "englishName": "Seoul Central Hospital",
+        "sourceName": "서울중앙병원"
+      }
+    ],
+    "deletions": [
+      {
+        "category": "characters",
+        "id": "duplicate-entry-id"
+      }
+    ]
   },
-  "deletedNotesEntries": { 
-    "characters": [4, 7], 
-    "places": [], 
-    "misc": [9, 12] 
-  }
+  "translatedText": "complete English translation..."
 }
 ```
 
-`deletedNotesEntries` contains the IDs of existing notes that must be deleted from the app. The IDs refer to entries already present in the existing notes data.
+### Notes Changes
 
-If no entries need to be deleted, return an empty array for each category:
-"deletedNotesEntries": { "characters": [], "places": [], "misc": []}
+`notesChanges` describes all changes that should be applied to the existing notes.
 
-### Entity Deduplication, Names, and Updates
+It contains three arrays:
 
-Before modifying entity notes, compare each entity with existing entries. Same entity: update the existing entry. Different entity: create a new entry. Uncertain: create a new entry rather than merge.
+* `updates`: existing entries that should be modified
+* `additions`: new entries that should be created
+* `deletions`: existing entries that should be removed
 
-Each entity has one entry regardless of aliases, titles, ranks, or forms of address. Store known names in `source name` and `english name` as |-separated pairs in the same order.
+All three arrays are required and must always be present. If no changes of a given type exist, provide an empty array `[]`.
 
-Example:
+### IDs
 
-```json
-[1, "김도현 | 도현 선생님 | 선생님", "Kim Dohyeon | Teacher Dohyeon | Teacher", "High school teacher; helps the main characters; later joins the evacuation group"]
+**IDs are generated and managed by the application, not by the model.**
+
+* For an entry in `updates`, use the exact existing entry ID supplied in the existing notes data.
+* For an entry in `deletions`, use the exact existing entry ID supplied in the existing notes data.
+* For an entry in `additions`, do **not** provide an ID. The application will generate the ID.
+* Never invent, guess, generate, modify, or replace an ID.
+* Never include an `id` field in an addition.
+
+### Names
+
+`englishName` should normally begin with the most natural or standard English rendering of the entity.
+
+When multiple known names, aliases, titles, or forms of address refer to the same entity, store them as `|`-separated pairs:
+
+```text
+sourceName: "김도현 | 도현 선생님 | 선생님"
+englishName: "Kim Dohyeon | Teacher Dohyeon | Teacher"
 ```
 
-For a new alias, keep the existing ID, append the name pair if new, preserve existing names, and update the description. Preserve useful facts; add new facts and correct existing ones only when new evidence clearly contradicts them.
-
-### Merging Existing Duplicate Entries
-
-If two or more existing entries are determined to refer to the same entity, merge them into a single canonical entry.
-
-* Retain the lowest existing ID.
-* Update the retained entry with all useful names and factual information from the duplicate entries.
-* Add the IDs of all redundant entries to deletedNotesEntries under their respective categories.
-* Do not create a new ID for the merged entity.
-* Do not leave the redundant entries in notesEntries.
-* The retained entry must contain the combined aliases and useful facts from all merged entries.
-
-For example, if the existing notes contain:
-
-characters:
-[5, "강민수", "Kang Minsu", "Male; police officer; protects the survivors"]
-[12, "민수 형사", "Detective Minsu", "Male; detective; carries a revolver"]
-
-and the new evidence establishes that `강민수` and `민수 형사` are the same person, retain ID `5` and merge the information:
-
-notesEntries:
-{
-  "characters": [
-    [5, "강민수 | 민수 형사", "Kang Minsu | Detective Minsu", "Male; police officer; detective; protects the survivors; carries a revolver"]
-  ]
-}
-
-deletedNotesEntries:
-{
-  "characters": [12],
-  "places": [],
-  "misc": []
-}
-
-### Deletion Rule
-
-When merging duplicate existing entries, retain one existing ID and add every redundant ID to `deletedNotesEntries`. Never create a new ID for the merged entity or silently discard a redundant entry. Never include the retained ID. Deleted IDs must not appear as active entries in `notesEntries`. Include all three categories in `deletedNotesEntries`, using `[]` when none apply.
+Keep the source and English names aligned by position.
 
 ### Description Format
 
-Use `;` to separate distinct pieces of information in the description.
-
 Descriptions should be concise factual summaries, not full sentences or prose paragraphs.
 
-When updating an existing description: Preserve useful facts, add only new `; `-separated facts, avoid repetition, and correct existing facts only when new evidence clearly contradicts them.
+Use `;` to separate distinct pieces of information.
 
 Example:
 
@@ -237,14 +229,144 @@ Example:
 High school teacher; helps the main characters; joins the evacuation group; carries a first-aid kit
 ```
 
-Generic references such as 선생님 (Teacher), 의사 (Doctor), or 생존자 (Survivor) are aliases only when context clearly establishes they refer to that specific entity.
+When updating an existing description:
 
-The canonical English name should normally be the first name in `english name`. Keep the most natural/standard English rendering there.
+* Preserve useful existing facts.
+* Add only genuinely new facts.
+* Avoid repetition.
+* Correct existing facts only when new evidence clearly contradicts them.
+* Keep the description concise.
 
-The same rules apply to `characters`, `places`, and `misc`.
+### Entity Deduplication, Names, and Updates
+
+Before modifying entity notes, compare each identified entity with the existing notes.
+
+* If the entity is the same as an existing entry, put the change in `updates` using that entry's existing ID.
+* If the entity is genuinely different, put it in `additions`.
+* If the identity is uncertain, create an addition rather than merging it with an existing entity.
+* Do not create a new addition when an existing entry clearly represents the same entity.
+
+Each entity has one entry regardless of aliases, titles, ranks, or forms of address.
+
+Store known names in `sourceName` and `englishName` as `|`-separated pairs in the same order.
+
+For example:
+
+```json
+{
+  "category": "characters",
+  "id": "existing-entry-id",
+  "sourceName": "김도현 | 도현 선생님 | 선생님",
+  "englishName": "Kim Dohyeon | Teacher Dohyeon | Teacher",
+  "description": "High school teacher; helps the main characters; later joins the evacuation group"
+}
+```
+
+When a new alias is discovered:
+
+* Preserve the existing names.
+* Append the new source/English name pair if it is genuinely new.
+* Preserve useful existing facts.
+* Add new facts.
+* Correct an existing fact only when new evidence clearly contradicts it.
+* Keep the existing entry ID unchanged.
+
+Generic references such as 선생님 (Teacher), 의사 (Doctor), or 생존자 (Survivor) should only be treated as aliases when the context clearly establishes that they refer to the specific entity.
+
+### Merging Existing Duplicate Entries
+
+If two or more existing entries are determined to refer to the same entity, merge them into a single canonical entry.
+
+* Retain the first existing entry according to the application's existing IDs.
+* Put the merged result in `updates` using the retained entry's existing ID.
+* Combine all useful names and factual information from the duplicate entries.
+* Add every redundant entry ID to `deletions`.
+* Do not create an addition for the merged entity.
+* Do not include redundant entries in `updates`.
+* Do not include the retained ID in `deletions`.
+
+For example, if the existing notes contain:
+
+```json
+[
+  {
+    "category": "characters",
+    "id": "first-entry-id",
+    "sourceName": "강민수",
+    "englishName": "Kang Minsu",
+    "description": "Male; police officer; protects the survivors"
+  },
+  {
+    "category": "characters",
+    "id": "new-entry-id",
+    "sourceName": "민수 형사",
+    "englishName": "Detective Minsu",
+    "description": "Male; detective; carries a revolver"
+  }
+]
+```
+
+and new evidence establishes that they are the same person, return:
+
+```json
+{
+  "notesChanges": {
+    "updates": [
+      {
+        "category": "characters",
+        "id": "first-entry-id",
+        "sourceName": "강민수 | 민수 형사",
+        "englishName": "Kang Minsu | Detective Minsu",
+        "description": "Male; police officer; detective; protects the survivors; carries a revolver"
+      }
+    ],
+    "additions": [],
+    "deletions": [
+      {
+        "category": "characters",
+        "id": "new-entry-id"
+      }
+    ]
+  },
+  "translatedText": "..."
+}
+```
+
+### Deletion Rules
+
+Only include an entry in `deletions` when that existing entry should actually be removed.
+
+This includes redundant entries resulting from a confirmed entity merge.
+
+When merging:
+
+* Keep exactly one existing entry.
+* Use the retained entry's existing ID in `updates`.
+* Delete every redundant existing entry using its existing ID.
+* Never delete the retained entry.
+* Never silently discard a redundant entry.
+* Never create a new entry for an entity that can be represented by the retained entry.
+
+A deletion contains only:
+
+```json
+{
+  "category": "characters",
+  "id": "existing-entry-id"
+}
+```
 
 ### Final Consistency Check
 
-Before producing the JSON, recheck all existing and newly identified entities for duplicates. For every duplicate, retain exactly one existing ID, merge all useful names/facts into it, add every redundant ID to `deletedNotesEntries`, and ensure redundant IDs do not remain in `notesEntries`.
+Before producing the JSON:
 
-`deletedNotesEntries` must always contain all three categories: `characters`, `places`, and `misc`.
+1. Recheck all existing and newly identified entities for duplicates.
+2. For every confirmed duplicate, retain exactly one existing entry.
+3. Put the retained entry in `updates` using its existing ID.
+4. Put every redundant existing entry in `deletions`.
+5. Ensure no deleted entry also appears in `updates`.
+6. Ensure no new entity in `additions` has an `id`.
+7. Ensure every `updates` and `deletions` ID belongs to an existing note.
+8. Ensure `category` is exactly one of `characters`, `places`, or `misc`.
+9. Ensure every entry has the required fields for its operation.
+10. Return only the JSON object matching the response schema.
