@@ -1,4 +1,5 @@
 import fs from 'node:fs/promises';
+import { dirname } from 'node:path';
 
 export async function isValidPath(filePath: string): Promise<boolean> {
   try {
@@ -12,13 +13,10 @@ export async function isValidPath(filePath: string): Promise<boolean> {
 
 export async function ensurePathExists(filePath: string): Promise<boolean> {
   try {
-    await fs.access(filePath);
+    await fs.mkdir(dirname(filePath), { recursive: true });
+    await fs.writeFile(filePath, '', { encoding: 'utf8', flag: 'a' });
   } catch (error) {
-    try {
-      await fs.writeFile(filePath, '', 'utf8');
-    } catch (createError) {
-      throw new Error(`Failed to create file: ${filePath}`, { cause: createError });
-    }
+    throw new Error(`Failed to create file: ${filePath}`, { cause: error });
   }
 
   return true;
