@@ -10,9 +10,10 @@
     "test": "tsx --test apps/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
-  "packageManager": "pnpm@11.20.0",
+  "packageManager": "pnpm@11.21.0",
   "dependencies": {
     "ai": "^7.0.52",
+    "fuse.js": "^7.5.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

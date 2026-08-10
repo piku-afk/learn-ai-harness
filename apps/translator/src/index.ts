@@ -3,7 +3,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { ensurePathExists, isValidPath } from '../../shared/util.js';
-import { manageNotes } from './notes.js';
+import { filterNotesBySourceText, manageNotes } from './notes.js';
 import { ModelResponse, Notes } from './schema.js';
 
 if (process.env.NODE_ENV === 'development') {
@@ -48,6 +48,7 @@ async function translate({
   ]);
 
   const notes = Notes.parse(JSON.parse(notesContent));
+  const filteredNotes = filterNotesBySourceText(sourceText, notes);
 
   const {
     output: { notesChanges, translatedText },
@@ -62,7 +63,7 @@ async function translate({
       {
         role: 'user',
         content: [
-          { type: 'text', text: `<notes>\n${JSON.stringify(notes)}\n</notes>\n\n` },
+          { type: 'text', text: `<notes>\n${JSON.stringify(filteredNotes)}\n</notes>\n\n` },
           { type: 'text', text: `<source>\n${sourceText}\n</source>` },
         ],
       },

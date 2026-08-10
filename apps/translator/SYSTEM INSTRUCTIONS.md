@@ -69,7 +69,7 @@ Once translated, apply these formatting conventions consistently.
 
 **System / Tower Announcements**
 - Centered, enclosed in lenticular brackets.
-  - *Example:* 『Objective: Survive the floor.』
+  - *Example:* 「Objective: Survive the floor.」
 
 **Skill Names (referenced, not cast)**
 - Title Case, no special punctuation.
@@ -270,8 +270,6 @@ When a new alias is discovered:
 * Add new facts.
 * Correct an existing fact only when new evidence clearly contradicts it.
 * Keep the existing entry ID unchanged.
-
-Generic references such as 선생님 (Teacher), 의사 (Doctor), or 생존자 (Survivor) should only be treated as aliases when the context clearly establishes that they refer to the specific entity.
 
 ### Merging Existing Duplicate Entries
 
