@@ -1,11 +1,56 @@
 import { generateId } from 'ai';
 import Fuse from 'fuse.js';
+import z from 'zod';
 
-import { NotesChanges, type Category, type Notes } from './schema.js';
+// NOTES SCHEMA
+const Category = z.enum(['characters', 'places', 'misc']).describe('entry category');
 
-export function manageNotes(currentNotes: Notes, changes: NotesChanges): Notes {
+const Note = z.object({
+  category: Category,
+  id: z.string().describe('16-character random entry unique id'),
+  description: z.string().describe('one-line description of the  entry'),
+  englishName: z.string().describe('english rendering chosen during translation'),
+  sourceName: z.string().describe('name exactly as it appears in the source text'),
+});
+
+const NotesDiff = z.object({
+  updates: z.array(Note).default([]),
+  additions: z.array(Note.omit({ id: true })).default([]),
+  deletions: z.array(Note.pick({ category: true, id: true })).default([]),
+});
+
+export const Notes = z.intersection(
+  z.object({ name: z.string().describe('novel name') }),
+  z.record(Category, z.array(Note.omit({ category: true })).default([])),
+);
+
+const NameMap = z
+  .array(
+    z.object({
+      sourceName: z.string().describe('name exactly as it appears in the source text'),
+      englishName: z.string().describe('english rendering chosen during translation'),
+    }),
+  )
+  .default([]);
+
+export const TranslationResponse = z.object({
+  newNames: NameMap,
+  translatedText: z.string().describe('the complete english translated text'),
+});
+
+export const NotesDiffResponse = z.object({
+  notesChanges: NotesDiff,
+});
+
+type Note = z.infer<typeof Note>;
+type Notes = z.infer<typeof Notes>;
+type Category = z.infer<typeof Category>;
+type NotesDiff = z.infer<typeof NotesDiff>;
+export type NameMap = z.infer<typeof NameMap>;
+
+export function manageNotes(currentNotes: Notes, changes: NotesDiff): Notes {
   const notes: Notes = structuredClone(currentNotes);
-  const notesChanges = NotesChanges.parse(changes);
+  const notesChanges = NotesDiff.parse(changes);
 
   // Create
   for (const change of notesChanges.additions) {
@@ -66,4 +111,3 @@ export function filterNotesBySourceText(sourceText: string, notes: Notes): Notes
     misc: filterCategory('misc'),
   };
 }
-

@@ -4,26 +4,31 @@
 
 ```mermaid
 flowchart TD
-    subgraph APP1["TS app"]
-        N["reads notes"]
-        C["reads chapter"]
+    subgraph APP["TS app"]
+        RC["reads raw chapter"]
+        RN["reads notes"]
+        FN["filters notes by source text"]
+        TC["writes translated chapter"]
+        WN["writes updated notes"]
     end
 
-    subgraph MODEL["Model"]
-        T["translate"]
-        U["return structured updates"]
+    subgraph MODEL1["Translation Model"]
+        TM["translate + extract new names"]
     end
 
-    subgraph APP2["TS app"]
-        W["writes translation"]
-        M["merges notes"]
+    subgraph MODEL2["Notes Model"]
+        NM["generate notes diff"]
     end
 
-    N --> T
-    C --> T
-    T --> U
-    U --> W
-    U --> M
+    RC --> FN
+    RN --> FN
+    FN --> TM
+    RC --> TM
+    TM --> TC
+    TM --> NN["new names"]
+    NN --> NM
+    FN --> NM
+    RC --> NM
+    NM --> WN
 ```
-
 

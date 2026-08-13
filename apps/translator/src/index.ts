@@ -1,15 +1,15 @@
-import { gateway, generateText, Output } from 'ai';
-import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { DevToolsTelemetry } from '@ai-sdk/devtools';
+import { gateway, generateText, registerTelemetry, Output, type LanguageModel } from 'ai';
+import { readFile, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
-import { ensurePathExists, isValidPath } from '../../shared/util.js';
-import { filterNotesBySourceText, manageNotes } from './notes.js';
-import { ModelResponse, Notes } from './schema.js';
+import { ensureFolderExists, isValidPath } from '../../shared/util.js';
+import { extractChapters, getChapterEntries } from './chapters.js';
+import { filterNotesBySourceText, manageNotes, type NameMap } from './notes.js';
+import { TranslationResponse, NotesDiffResponse, Notes } from './notes.js';
+import { ChapterStatus, getChapterStatus, updateProgress } from './progress.js';
 
 if (process.env.NODE_ENV === 'development') {
-  const { DevToolsTelemetry } = await import('@ai-sdk/devtools');
-  const { registerTelemetry } = await import('ai');
-
   registerTelemetry(DevToolsTelemetry());
 }
 
@@ -27,91 +27,144 @@ if (process.env.NODE_ENV === 'development') {
 // the overall workflow; the individual modules contain the implementation
 // details for each step.
 
-const instructions = await readFile(join('apps', 'translator', 'SYSTEM INSTRUCTIONS.md'), 'utf8');
+const model: LanguageModel = 'tencent/hy3';
 
-async function translate({
-  inputFile,
-  outputFile,
-  notesFile,
-}: {
-  inputFile: string;
-  outputFile: string;
-  notesFile: string;
-}) {
-  isValidPath(inputFile);
-  isValidPath(notesFile);
-  ensurePathExists(outputFile); // create the output file if it does not exists
+const PATHS = {
+  rawsFolder: join('apps', 'translator', 'test-translation', 'raws'),
+  rawsFile: join('apps', 'translator', 'test-translation', 'raw.txt'),
+  notesInstructions: join('apps', 'translator', 'NOTES INSTRUCTIONS.md'),
+  translatedFolder: join('apps', 'translator', 'test-translation', 'translated'),
+  translationInstructions: join('apps', 'translator', 'TRANSLATION INSTRUCTIONS.md'),
+  notesFile: join('apps', 'translator', 'test-translation', 'translated', 'op.notes.json'),
+  progressFile: join('apps', 'translator', 'test-translation', 'translated', 'op.progress.json'),
+} as const;
 
-  const [notesContent, sourceText] = await Promise.all([
-    readFile(notesFile, 'utf8'),
-    readFile(inputFile, 'utf8'),
-  ]);
-
-  const notes = Notes.parse(JSON.parse(notesContent));
-  const filteredNotes = filterNotesBySourceText(sourceText, notes);
-
-  const {
-    output: { notesChanges, translatedText },
-  } = await generateText({
-    model: 'tencent/hy3',
-    instructions,
-    temperature: 0.1,
-    reasoning: 'none',
-    output: Output.object({ schema: ModelResponse }),
-    maxOutputTokens: 10_000,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          { type: 'text', text: `<notes>\n${JSON.stringify(filteredNotes)}\n</notes>\n\n` },
-          { type: 'text', text: `<source>\n${sourceText}\n</source>` },
-        ],
-      },
-    ],
+async function handleError(error: unknown, chapterName: string) {
+  await updateProgress(PATHS.progressFile, {
+    chapterId: chapterName,
+    status: ChapterStatus.enum.failed,
+    error: String(error),
   });
-
-  // write translated text to output file
-  await writeFile(outputFile, translatedText, 'utf8');
-  const updatedNotes = manageNotes(notes, notesChanges);
-
-  await writeFile(notesFile, JSON.stringify(updatedNotes, null, 2), 'utf8');
+  throw new Error(`${chapterName} failed`, { cause: error });
 }
 
-const rawsFolderPath = join('apps', 'translator', 'test-translation', 'raws');
-const outputFolderPath = join('apps', 'translator', 'test-translation', 'translated');
-const rawFile = join('apps', 'translator', 'test-translation', 'raw.txt');
-const notesFile = join('apps', 'translator', 'test-translation', 'translated', 'op.notes.json');
+async function main() {
+  await extractChapters({
+    rawsFile: PATHS.rawsFile,
+    outputDir: PATHS.rawsFolder,
+    progressFile: PATHS.progressFile,
+  });
 
-// extract chapters;
-const rawText = await readFile(rawFile, 'utf8');
-const chapters = rawText.split(/(?=\d+화\.)/).filter((s) => s.trim().length > 0);
+  const [notesInstructions, translationInstructions] = await Promise.all([
+    readFile(PATHS.notesInstructions, 'utf8'),
+    readFile(PATHS.translationInstructions, 'utf8'),
+  ]);
 
-for (const chapter of chapters) {
-  const match = chapter.match(/^(\d+)화\./);
+  const entries = await getChapterEntries(PATHS.rawsFolder);
 
-  if (!match) {
-    console.warn('Could not find chapter number, skipping');
-    continue;
+  for (const entry of entries) {
+    let newNames: NameMap = [];
+    const chapterName = entry.name.replace('.txt', '');
+
+    if ((await getChapterStatus(PATHS.progressFile, chapterName)) === ChapterStatus.enum.success) {
+      continue;
+    } else if (
+      (await getChapterStatus(PATHS.progressFile, chapterName)) === ChapterStatus.enum.failed
+    ) {
+      await updateProgress(PATHS.progressFile, {
+        chapterId: chapterName,
+        status: ChapterStatus.enum.pending,
+      });
+    }
+
+    const inputFile = join(PATHS.rawsFolder, entry.name);
+    const outputFile = join(PATHS.translatedFolder, `${chapterName}.md`);
+
+    isValidPath(inputFile);
+    isValidPath(PATHS.notesFile);
+    await ensureFolderExists(dirname(outputFile)); // create the output folder if it does not exists
+
+    const [notesContent, sourceText] = await Promise.all([
+      readFile(PATHS.notesFile, 'utf8'),
+      readFile(inputFile, 'utf8'),
+    ]);
+
+    const notes = Notes.parse(JSON.parse(notesContent));
+    const filteredNotes = filterNotesBySourceText(sourceText, notes);
+
+    if ((await getChapterStatus(PATHS.progressFile, chapterName)) === ChapterStatus.enum.pending) {
+      try {
+        const { output } = await generateText({
+          model,
+          instructions: translationInstructions,
+          temperature: 0.3,
+          reasoning: 'low',
+          output: Output.object({ schema: TranslationResponse }),
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: `<notes>\n${JSON.stringify(filteredNotes)}\n</notes>\n\n` },
+                { type: 'text', text: `<source>\n${sourceText}\n</source>` },
+              ],
+            },
+          ],
+        });
+
+        newNames = output.newNames;
+        await writeFile(outputFile, output.translatedText, 'utf8');
+        await updateProgress(PATHS.progressFile, {
+          chapterId: chapterName,
+          status: ChapterStatus.enum.syncing,
+        });
+      } catch (error) {
+        await handleError(error, chapterName);
+      }
+    }
+
+    if ((await getChapterStatus(PATHS.progressFile, chapterName)) === ChapterStatus.enum.syncing) {
+      try {
+        const {
+          output: { notesChanges },
+        } = await generateText({
+          model,
+          instructions: notesInstructions,
+          reasoning: 'none',
+          output: Output.object({ schema: NotesDiffResponse }),
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'text', text: `<notes>\n${JSON.stringify(filteredNotes)}\n</notes>\n\n` },
+                {
+                  type: 'text',
+                  text: `<new-names>\n${JSON.stringify(newNames)}\n</new-names>\n\n`,
+                },
+                { type: 'text', text: `<source>\n${sourceText}\n</source>` },
+              ],
+            },
+          ],
+        });
+
+        const updatedNotes = manageNotes(notes, notesChanges);
+        await writeFile(PATHS.notesFile, JSON.stringify(updatedNotes, null, 2), 'utf8');
+        await updateProgress(PATHS.progressFile, {
+          chapterId: chapterName,
+          status: ChapterStatus.enum.success,
+        });
+      } catch (error) {
+        await handleError(error, chapterName);
+      }
+    }
+
+    console.log(`${chapterName} has been translated successfully`);
   }
-  const num = match[1];
-  const chapterName = `Chapter${num}.txt`;
-  const filename = join(rawsFolderPath, chapterName);
-  await writeFile(filename, chapter.trim(), 'utf8');
-  console.log(chapterName, 'extracted');
 }
 
 const preCredits = await gateway.getCredits();
-const entries = (await readdir(rawsFolderPath, { withFileTypes: true }))
-  .filter((entry) => entry.isFile() && entry.name.endsWith('.txt'))
-  .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-for (const entry of entries) {
-  const inputFile = join(rawsFolderPath, entry.name);
-  const outputFile = join(outputFolderPath, entry.name.replace(/\.txt$/, '.md'));
-
-  await translate({ inputFile, outputFile, notesFile });
-  console.log(entry.name, 'translated');
+try {
+  await main();
+} finally {
+  const postCredit = await gateway.getCredits();
+  console.log('Total credits used: ', Number(preCredits.balance) - Number(postCredit.balance));
 }
-
-const postCredit = await gateway.getCredits();
-console.log('Total credits used: ', Number(preCredits.balance) - Number(postCredit.balance));
