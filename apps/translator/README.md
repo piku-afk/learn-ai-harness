@@ -3,32 +3,44 @@
 ## Workflow
 
 ```mermaid
-flowchart TD
-    subgraph APP["TS app"]
-        RC["reads raw chapter"]
-        RN["reads notes"]
-        FN["filters notes by source text"]
-        TC["writes translated chapter"]
-        WN["writes updated notes"]
+flowchart LR
+    subgraph INPUT["Input"]
+        RC["Raw chapter"]
+        RN["Existing notes"]
     end
 
-    subgraph MODEL1["Translation Model"]
-        TM["translate + extract new names"]
+    subgraph PREP["Prepare context"]
+        FN["Filter relevant names"]
+        FN2["Filter relevant notes"]
     end
 
-    subgraph MODEL2["Notes Model"]
-        NM["generate notes diff"]
+    subgraph MODELS["Models"]
+        NM["Names model"]
+        TM["Translation model"]
+        NDM["Notes model"]
+    end
+
+    subgraph OUTPUT["Output"]
+        TC["Translated chapter"]
+        WN["Updated notes"]
     end
 
     RC --> FN
     RN --> FN
-    FN --> TM
-    RC --> TM
-    TM --> TC
-    TM --> NN["new names"]
-    NN --> NM
+
+    RC --> FN2
+    RN --> FN2
+
     FN --> NM
-    RC --> NM
-    NM --> WN
+
+    RC --> TM
+    FN --> TM
+    NM --> TM
+    TM --> TC
+
+    RC --> NDM
+    FN --> NDM
+    FN2 --> NDM
+    NDM --> WN
 ```
 

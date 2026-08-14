@@ -3,12 +3,12 @@ import { gateway, registerTelemetry } from 'ai';
 import { DevToolsTelemetry } from '@ai-sdk/devtools';
 import { readFile, writeFile } from 'node:fs/promises';
 
-import { Notes } from './notes.js';
+import { filterNotesBySourceText, Notes } from './notes.js';
 import { PATHS } from './constants.js';
-import { getNotesDiff, translate } from './ai.js';
+import { getNewNames, getNotesDiff, translate } from './ai.js';
 import { extractChapters, getChapterEntries } from './chapters.js';
 import { ensureFolderExists, isValidPath } from '../../shared/util.js';
-import { filterNotesBySourceText, manageNotes, type NameMap } from './notes.js';
+import { filterNamesBySourceText, manageNotes, type NameTranslationMap } from './notes.js';
 import { ChapterStatus, getChapterStatus, updateProgress } from './progress.js';
 
 if (process.env.NODE_ENV === 'development') {
@@ -51,7 +51,7 @@ async function main() {
     const entries = await getChapterEntries(PATHS.rawsFolder);
 
     for (const entry of entries) {
-      let newNames: NameMap = [];
+      let newNames: NameTranslationMap = [];
       const chapterName = entry.name.replace('.txt', '');
 
       if (
@@ -80,18 +80,22 @@ async function main() {
       ]);
 
       const notes = Notes.parse(JSON.parse(notesContent));
-      const filteredNotes = filterNotesBySourceText(sourceText, notes);
 
       if (
         (await getChapterStatus(PATHS.progressFile, chapterName)) === ChapterStatus.enum.pending
       ) {
         try {
-          const translationOutput = await translate({
+          const filteredNames = filterNamesBySourceText(sourceText, notes);
+
+          const newNamesOutput = await getNewNames({ sourceText, filteredNames: filteredNames });
+          newNames = newNamesOutput.newNames;
+
+          const translatedText = await translate({
             sourceText,
-            filteredNotes: JSON.stringify(filteredNotes),
+            filteredNames: [...filteredNames, ...newNames],
           });
-          newNames = translationOutput.newNames;
-          await writeFile(outputFile, translationOutput.translatedText, 'utf8');
+
+          await writeFile(outputFile, translatedText, 'utf8');
           await updateProgress(PATHS.progressFile, {
             chapterId: chapterName,
             status: ChapterStatus.enum.syncing,
@@ -107,8 +111,8 @@ async function main() {
         try {
           const { notesChanges } = await getNotesDiff({
             sourceText,
-            newNames: JSON.stringify(newNames),
-            filteredNotes: JSON.stringify(filteredNotes),
+            newNames: newNames,
+            filteredNotes: filterNotesBySourceText(sourceText, notes),
           });
           const updatedNotes = manageNotes(notes, notesChanges);
           await writeFile(PATHS.notesFile, JSON.stringify(updatedNotes, null, 2), 'utf8');

@@ -3,6 +3,7 @@ import { join } from 'node:path';
 export const PATHS = {
   rawsFolder: join('apps', 'translator', 'test-translation', 'raws'),
   rawsFile: join('apps', 'translator', 'test-translation', 'raw.txt'),
+  namesInstructions: join('apps', 'translator', 'NAMES INSTRUCTIONS.md'),
   notesInstructions: join('apps', 'translator', 'NOTES INSTRUCTIONS.md'),
   translatedFolder: join('apps', 'translator', 'test-translation', 'translated'),
   translationInstructions: join('apps', 'translator', 'TRANSLATION INSTRUCTIONS.md'),

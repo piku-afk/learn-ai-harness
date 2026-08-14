@@ -24,7 +24,7 @@ export const Notes = z.intersection(
   z.record(Category, z.array(Note.omit({ category: true })).default([])),
 );
 
-const NameMap = z
+const NameTranslationMap = z
   .array(
     z.object({
       sourceName: z.string().describe('name exactly as it appears in the source text'),
@@ -33,22 +33,19 @@ const NameMap = z
   )
   .default([]);
 
-export const TranslationResponse = z.object({
-  newNames: NameMap,
-  translatedText: z.string().describe('the complete english translated text'),
-});
+export const NewNamesResponse = z.object({ newNames: NameTranslationMap });
 
 export const NotesDiffResponse = z.object({
   notesChanges: NotesDiff,
 });
 
 type Note = z.infer<typeof Note>;
-type Notes = z.infer<typeof Notes>;
 type Category = z.infer<typeof Category>;
 type NotesDiff = z.infer<typeof NotesDiff>;
-export type NameMap = z.infer<typeof NameMap>;
+export type Notes = z.infer<typeof Notes>;
+export type NameTranslationMap = z.infer<typeof NameTranslationMap>;
 export type NotesDiffResponse = z.infer<typeof NotesDiffResponse>;
-export type TranslationResponse = z.infer<typeof TranslationResponse>;
+export type NewNamesResponse = z.infer<typeof NewNamesResponse>;
 
 export function manageNotes(currentNotes: Notes, changes: NotesDiff): Notes {
   const notes: Notes = structuredClone(currentNotes);
@@ -112,4 +109,31 @@ export function filterNotesBySourceText(sourceText: string, notes: Notes): Notes
     places: filterCategory('places'),
     misc: filterCategory('misc'),
   };
+}
+
+export function filterNamesBySourceText(sourceText: string, notes: Notes): NameTranslationMap {
+  const fuse = new Fuse([{ text: normalize(sourceText) }], {
+    keys: ['text'],
+    threshold: 0.3,
+    ignoreLocation: true,
+  });
+
+  const isPresent = (sourceName: string): boolean => {
+    return sourceName
+      .split('|')
+      .map((name) => normalize(name.trim()))
+      .filter(Boolean)
+      .some((alias) => {
+        return fuse.search(alias).length > 0;
+      });
+  };
+
+  const filterCategory = (category: Category) =>
+    notes[category].filter((note) => isPresent(note.sourceName));
+
+  return [
+    ...filterCategory('characters'),
+    ...filterCategory('places'),
+    ...filterCategory('misc'),
+  ].map((entity) => ({ sourceName: entity.sourceName, englishName: entity.englishName }));
 }
