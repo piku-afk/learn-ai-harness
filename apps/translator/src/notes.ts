@@ -47,6 +47,8 @@ type Notes = z.infer<typeof Notes>;
 type Category = z.infer<typeof Category>;
 type NotesDiff = z.infer<typeof NotesDiff>;
 export type NameMap = z.infer<typeof NameMap>;
+export type NotesDiffResponse = z.infer<typeof NotesDiffResponse>;
+export type TranslationResponse = z.infer<typeof TranslationResponse>;
 
 export function manageNotes(currentNotes: Notes, changes: NotesDiff): Notes {
   const notes: Notes = structuredClone(currentNotes);

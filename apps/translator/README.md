@@ -1,6 +1,6 @@
 # Translator Harness
 
-## Introduction
+## Workflow
 
 ```mermaid
 flowchart TD
